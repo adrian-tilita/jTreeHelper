@@ -3,20 +3,21 @@ package JTreeHelper;
 import JTreeHelper.DataRetrieval.DataRetrieval;
 import java.util.ArrayList;
 
+import javax.swing.JFrame;
 import javax.swing.JTree;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeModel;
 import javax.swing.event.TreeWillExpandListener;
 import javax.swing.tree.ExpandVetoException;
 import javax.swing.event.TreeExpansionEvent;
-import javax.swing.event.TreeExpansionListener;
+import javax.swing.SwingUtilities;
 
 /**
  * Main JTreeHelper service
  * @author Adrian Tilita
  * @email <adrian@tilita.ro>
  */
-public class Service extends Observable implements TreeWillExpandListener, TreeExpansionListener {
+public class Service extends Observable implements TreeWillExpandListener {
     /**
      * Configurate if the JTree should have the root node visible
      */
@@ -31,6 +32,11 @@ public class Service extends Observable implements TreeWillExpandListener, TreeE
      * The actual JTree to be "helped"
      */
     private JTree JTree = null;
+
+    /**
+     * The parent frame
+     */
+    private JFrame frame = null;
 
     /**
      * RootNode Reference
@@ -53,8 +59,9 @@ public class Service extends Observable implements TreeWillExpandListener, TreeE
      * 
      * @param   JTree 
      */
-    public Service(JTree JTree) {
+    public Service(JTree JTree, JFrame frame) {
         this.JTree = JTree;
+        this.frame = frame;
     }
 
     /**
@@ -96,7 +103,6 @@ public class Service extends Observable implements TreeWillExpandListener, TreeE
     public String getSelectedValue() {
         DefaultMutableTreeNode currentNode = (DefaultMutableTreeNode)this.JTree.getLastSelectedPathComponent();
         if (currentNode == null) {
-            System.out.print("Is NULL");
             return "";
         }
         return this.dataRetrieval.getNodeValue(currentNode);
@@ -142,7 +148,6 @@ public class Service extends Observable implements TreeWillExpandListener, TreeE
      */
     private void attachEvents() {
         this.JTree.addTreeWillExpandListener(this);
-        this.JTree.addTreeExpansionListener(this);
     }
 
     /**
@@ -153,7 +158,6 @@ public class Service extends Observable implements TreeWillExpandListener, TreeE
     @Override
     public void treeWillExpand(TreeExpansionEvent event) throws ExpandVetoException {
         DefaultMutableTreeNode currentNode = (DefaultMutableTreeNode)event.getPath().getLastPathComponent();
-        ((Observable)this).dispatchEvent(Event.START, currentNode);
         String nodeId = this.dataRetrieval.getNodeValue(currentNode);
         boolean isCached = false;
         for (String cached:this.cachedNodes) {
@@ -163,27 +167,14 @@ public class Service extends Observable implements TreeWillExpandListener, TreeE
             }
         }
         if (isCached == false) {
-            this.dataRetrieval.addChildren(currentNode, 0, LEVEL_DEPTH_LOAD);
+            // decouple the processing in a Swing Worker
+            Worker worker = new Worker(this, this.dataRetrieval);
+            worker.setData(currentNode, LEVEL_DEPTH_LOAD);
+            worker.execute();
+            // we assume we can cache it, even if the process is not done
             this.cacheNode(currentNode, 0);
         }
     }
-
-    /**
-     * After we expanded we send the notification to listeners
-     * @param event 
-     */
-    @Override
-    public void treeExpanded(TreeExpansionEvent event) {
-        DefaultMutableTreeNode currentNode = (DefaultMutableTreeNode)event.getPath().getLastPathComponent();
-        ((Observable)this).dispatchEvent(Event.COMPLETE, currentNode);        
-    }
-
-    /**
-     * Empty implementation - just to be according TreeExpansionListener interface
-     * @param event 
-     */
-    @Override
-    public void treeCollapsed(TreeExpansionEvent event) {}
 
     /**
      * Empty implementation - just to be according TreeWillExpandListener interface
@@ -207,5 +198,12 @@ public class Service extends Observable implements TreeWillExpandListener, TreeE
                 this.cacheNode((DefaultMutableTreeNode)node.getChildAt(it), offset+1);
             }
         }
+    }
+
+    /**
+     * Update the entire frame after the TreeModel was modified in the swing worker
+     */
+    public void updateFrame() {
+        SwingUtilities.updateComponentTreeUI(this.frame);
     }
 }

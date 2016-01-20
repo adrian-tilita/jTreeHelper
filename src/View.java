@@ -23,7 +23,7 @@ public class View extends javax.swing.JFrame {
      */
     public View() {
         initComponents();
-        this.JTreeHelper = new JTreeHelper.Service(this.jTree1);
+        this.JTreeHelper = new JTreeHelper.Service(this.jTree1, this);
         LoadingObserver observer = new LoadingObserver();
         observer.setLoader(jLabel1);
         JTreeHelper.addObserver(observer);
